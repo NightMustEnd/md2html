@@ -8,6 +8,7 @@ MarkdownファイルをHTMLドキュメントサイトに変換するCLIツー�
 ## 機能
 
 - ディレクトリ内の`.md`ファイルを自動検出
+- **HTML→Markdown逆変換**（`-r`オプション）
 - ナビゲーションサイドバー
 - 全文検索
 - ダークモード対応
@@ -35,14 +36,19 @@ md2html
 ### コマンドライン引数
 
 ```bash
+# Markdown → HTML
 md2html -i /path/to/markdown -o /path/to/output
+
+# HTML → Markdown（逆変換）
+md2html -r -i /path/to/html -o /path/to/markdown
 ```
 
 ### オプション
 
 ```
--i, --input    入力ディレクトリ（Markdownファイルの場所）
--o, --output   出力ディレクトリ（HTMLの出力先）
+-i, --input    入力ディレクトリ
+-o, --output   出力ディレクトリ
+-r, --reverse  逆変換モード（HTML→Markdown）
 -V, --version  バージョン表示
 -h, --help     ヘルプ表示
 ```
