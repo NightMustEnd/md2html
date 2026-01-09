@@ -8,6 +8,8 @@ from pathlib import Path
 
 from markdown import Markdown
 from pygments.formatters import HtmlFormatter
+from markdownify import MarkdownConverter
+from bs4 import BeautifulSoup
 
 # HTMLテンプレート
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -278,3 +280,188 @@ def generate_search_index(search_index: list[dict], output_dir: Path) -> None:
     js_content = f"window.__SEARCH_INDEX__ = {json.dumps(search_index, ensure_ascii=False, indent=2)};"
     (assets_dir / "search-index.js").write_text(js_content, encoding="utf-8")
     print("生成: assets/search-index.js")
+
+
+# ========== HTML to Markdown Conversion ==========
+
+
+class CustomMarkdownConverter(MarkdownConverter):
+    """カスタムMarkdown変換器: コード言語、見出しID、テーブルを保持"""
+
+    def __init__(self, **options):
+        # コード言語検出コールバックを設定
+        options["code_language_callback"] = self.extract_code_language
+        options["heading_style"] = "ATX"  # # スタイルの見出し
+        options["bullets"] = "-"  # リストは - を使用
+        super().__init__(**options)
+
+    def extract_code_language(self, el):
+        """コードブロックのクラスから言語を抽出"""
+        # class="highlight-python" や class="language-python" を探す
+        classes = el.get("class", [])
+        for cls in classes:
+            if cls.startswith("highlight-"):
+                return cls.replace("highlight-", "")
+            if cls.startswith("language-"):
+                return cls.replace("language-", "")
+
+        # Pygmentsは <div class="highlight"><pre><code class="language-python"> を使用
+        # 親要素と子要素をチェック
+        if el.name == "div" and "highlight" in classes:
+            pre = el.find("pre")
+            if pre:
+                code = pre.find("code")
+                if code:
+                    code_classes = code.get("class", [])
+                    for c in code_classes:
+                        if c.startswith("language-"):
+                            return c.replace("language-", "")
+        return None
+
+    def convert_h1(self, el, text, parent_tags=None):
+        """h1を変換してID属性を保持"""
+        return self._convert_heading(el, text, 1)
+
+    def convert_h2(self, el, text, parent_tags=None):
+        """h2を変換してID属性を保持"""
+        return self._convert_heading(el, text, 2)
+
+    def convert_h3(self, el, text, parent_tags=None):
+        """h3を変換してID属性を保持"""
+        return self._convert_heading(el, text, 3)
+
+    def convert_h4(self, el, text, parent_tags=None):
+        """h4を変換してID属性を保持"""
+        return self._convert_heading(el, text, 4)
+
+    def convert_h5(self, el, text, parent_tags=None):
+        """h5を変換してID属性を保持"""
+        return self._convert_heading(el, text, 5)
+
+    def convert_h6(self, el, text, parent_tags=None):
+        """h6を変換してID属性を保持"""
+        return self._convert_heading(el, text, 6)
+
+    def _convert_heading(self, el, text, level):
+        """見出しをID保持で変換するヘルパー"""
+        heading_id = el.get("id")
+        # アンカーリンクをテキストから除去
+        # md2htmlは <a href="#id" class="anchor">#</a> を追加
+        # これはmarkdownifyでは [#](#id) として変換される
+        clean_text = re.sub(r"\[#\]\(#[^\)]+\)\s*", "", text).strip()
+        clean_text = re.sub(r"#\s*$", "", clean_text).strip()
+
+        prefix = "#" * level
+        if heading_id:
+            # attr_list拡張構文を使用: ## Heading {#custom-id}
+            return f"\n{prefix} {clean_text} {{#{heading_id}}}\n\n"
+        else:
+            return f"\n{prefix} {clean_text}\n\n"
+
+
+def discover_html_files(source_dir: Path) -> list[str]:
+    """ディレクトリ内の.htmlファイルを検出してリストを返す"""
+    html_files = []
+    for html_path in sorted(source_dir.glob("*.html")):
+        # index.htmlはスキップ（自動生成されたページ）
+        if html_path.name == "index.html":
+            continue
+        html_files.append(html_path.name)
+    return html_files
+
+
+def extract_html_content(html_full: str) -> str:
+    """完全なHTMLページからメインコンテンツを抽出"""
+    soup = BeautifulSoup(html_full, "html.parser")
+
+    # md2html固有のコンテンツ構造を探す
+    article = soup.find("article", class_="content")
+    if article:
+        return str(article)
+
+    # フォールバック: 一般的なarticleタグ
+    article = soup.find("article")
+    if article:
+        return str(article)
+
+    # フォールバック: mainタグ
+    main = soup.find("main")
+    if main:
+        # mainにarticleが含まれている場合はそれを使用
+        article = main.find("article")
+        if article:
+            return str(article)
+        return str(main)
+
+    # 最後の手段: bodyコンテンツ
+    body = soup.find("body")
+    if body:
+        return str(body)
+
+    # 全て失敗した場合は全体を返す
+    return html_full
+
+
+def convert_html_to_markdown_content(html_content: str, base_filename: str) -> str:
+    """HTMLコンテンツをMarkdownに変換してポストプロセス"""
+    # カスタム変換器を初期化
+    converter = CustomMarkdownConverter(
+        heading_style="ATX",
+        bullets="-",
+        strip=["script", "style", "button"],  # UI要素を除去
+    )
+
+    # HTMLをMarkdownに変換
+    markdown_content = converter.convert(html_content)
+
+    # ポストプロセス: リンクを書き換え (.html -> .md)
+    markdown_content = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\.html(#[^)]+)?\)",
+        lambda m: f'[{m.group(1)}]({m.group(2)}.md{m.group(3) or ""})',
+        markdown_content,
+    )
+
+    # 余分な空白行をクリーンアップ
+    markdown_content = re.sub(r"\n{3,}", "\n\n", markdown_content)
+
+    # 末尾の改行を確保
+    if not markdown_content.endswith("\n"):
+        markdown_content += "\n"
+
+    return markdown_content
+
+
+def convert_html_to_markdown(
+    source_dir: Path, output_dir: Path, html_files: list[str]
+) -> None:
+    """HTMLファイルをMarkdownに変換"""
+    output_dir.mkdir(exist_ok=True)
+
+    for html_file in html_files:
+        html_path = source_dir / html_file
+        if not html_path.exists():
+            print(f"警告: {html_file} が見つかりません")
+            continue
+
+        # HTMLファイルを読み込み
+        try:
+            html_full = html_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"警告: {html_file} のエンコーディングに問題があります")
+            continue
+
+        if not html_full.strip():
+            print(f"警告: {html_file} は空です")
+            continue
+
+        # メインコンテンツを抽出
+        html_content = extract_html_content(html_full)
+
+        # Markdownに変換
+        md_content = convert_html_to_markdown_content(html_content, html_file)
+
+        # 出力
+        md_file = html_file.replace(".html", ".md")
+        md_path = output_dir / md_file
+        md_path.write_text(md_content, encoding="utf-8")
+        print(f"生成: {md_file}")

@@ -30,6 +30,12 @@ def parse_args() -> argparse.Namespace:
         help="出力ディレクトリ（HTMLの出力先）",
     )
     parser.add_argument(
+        "-r",
+        "--reverse",
+        action="store_true",
+        help="逆変換モード: HTMLをMarkdownに変換",
+    )
+    parser.add_argument(
         "-V",
         "--version",
         action="version",
@@ -55,39 +61,67 @@ def main() -> int:
     """メイン処理"""
     args = parse_args()
 
+    # モードに応じたプロンプトを設定
+    if args.reverse:
+        input_prompt = "入力ディレクトリ（HTMLファイルの場所）"
+        output_prompt = "出力ディレクトリ（Markdownの出力先）"
+        default_output_dir = "markdown"
+    else:
+        input_prompt = "入力ディレクトリ（Markdownファイルの場所）"
+        output_prompt = "出力ディレクトリ（HTMLの出力先）"
+        default_output_dir = "site"
+
     # 入力ディレクトリの決定
     if args.input:
         source_dir = args.input.expanduser().resolve()
     else:
-        source_dir = get_directory_interactive("入力ディレクトリ")
+        source_dir = get_directory_interactive(input_prompt)
 
     # 出力ディレクトリの決定
     if args.output:
         output_dir = args.output.expanduser().resolve()
     else:
-        default_output = source_dir.parent / "site"
-        output_dir = get_directory_interactive("出力ディレクトリ", default_output)
+        default_output = source_dir.parent / default_output_dir
+        output_dir = get_directory_interactive(output_prompt, default_output)
 
     # 入力ディレクトリの存在確認
     if not source_dir.exists():
         print(f"エラー: 入力ディレクトリが見つかりません: {source_dir}")
         return 1
 
-    # Markdownファイルを検出
-    md_files = discover_md_files(source_dir)
-    if not md_files:
-        print(f"エラー: Markdownファイルが見つかりません: {source_dir}")
-        return 1
+    if args.reverse:
+        # HTML→Markdown変換
+        from .converter import convert_html_to_markdown, discover_html_files
 
-    print(f"入力: {source_dir}")
-    print(f"出力: {output_dir}")
-    print(f"ファイル数: {len(md_files)}")
-    print()
+        html_files = discover_html_files(source_dir)
+        if not html_files:
+            print(f"エラー: HTMLファイルが見つかりません: {source_dir}")
+            return 1
 
-    setup_directories(output_dir)
-    search_index = build_pages(source_dir, output_dir, md_files)
-    generate_search_index(search_index, output_dir)
-    print("\n完了！")
+        print(f"入力: {source_dir}")
+        print(f"出力: {output_dir}")
+        print(f"ファイル数: {len(html_files)}")
+        print()
+
+        convert_html_to_markdown(source_dir, output_dir, html_files)
+        print("\n完了！")
+    else:
+        # Markdown→HTML変換（既存機能）
+        md_files = discover_md_files(source_dir)
+        if not md_files:
+            print(f"エラー: Markdownファイルが見つかりません: {source_dir}")
+            return 1
+
+        print(f"入力: {source_dir}")
+        print(f"出力: {output_dir}")
+        print(f"ファイル数: {len(md_files)}")
+        print()
+
+        setup_directories(output_dir)
+        search_index = build_pages(source_dir, output_dir, md_files)
+        generate_search_index(search_index, output_dir)
+        print("\n完了！")
+
     return 0
 
 
