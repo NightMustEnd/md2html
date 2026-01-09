@@ -1,5 +1,8 @@
 # md2html
 
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 MarkdownファイルをHTMLドキュメントサイトに変換するCLIツール。
 
 ## 機能
@@ -16,7 +19,7 @@ MarkdownファイルをHTMLドキュメントサイトに変換するCLIツー�
 ## インストール
 
 ```bash
-pip install git+https://github.com/username/md2html.git
+pip install git+https://github.com/NightMustEnd/md2html.git
 ```
 
 ## 使い方
@@ -62,6 +65,10 @@ md2html -i /path/to/markdown -o /path/to/output
 完了！
 ```
 
+## 貢献
+
+貢献は歓迎します！詳細は [CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
+
 ## ライセンス
 
-MIT
+MIT - 詳細は [LICENSE](LICENSE) を参照
