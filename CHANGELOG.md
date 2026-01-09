@@ -4,6 +4,12 @@
 
 フォーマットは [Keep a Changelog](https://keepachangelog.com/ja/1.0.0/) に基づいています。
 
+## [Unreleased]
+
+### Added
+- HTML → Markdown 逆変換機能（`-r`/`--reverse`オプション）
+- 依存関係: markdownify, beautifulsoup4
+
 ## [0.1.0] - 2025-01-08
 
 ### Added
